@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Mis Finanzas Dark</title>
+    
+    <!-- CONFIGURACIÓN DE APP INDEPENDIENTE (PWA) -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#000000">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2344/2344132.png">
+
+    <style>
+        :root {
+            --primary: #3949ab; /* Azul vibrante para modo oscuro */
+            --income: #43a047;
+            --expense: #e53935;
+            --bg: #000000; /* Fondo Negro */
+            --card-bg: #121212; /* Gris muy oscuro para tarjetas */
+            --text-main: #ffffff;
+            --text-secondary: #b0b0b0;
+            --input-bg: #1e1e1e;
+        }
+        
+        body { 
+            font-family: 'Segoe UI', sans-serif; 
+            background: var(--bg); 
+            color: var(--text-main);
+            margin: 0; 
+            padding: 0; 
+            padding-bottom: 30px;
+            user-select: none;
+        }
+        
+        .app-header {
+            background: #000000;
+            color: white;
+            padding: 20px 20px;
+            text-align: center;
+            border-bottom: 1px solid #333;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+        .app-header h1 { margin: 0; font-size: 1.1rem; letter-spacing: 2px; text-transform: uppercase; font-weight: 300; }
+
+        .container { padding: 15px; }
+        .card { background: var(--card-bg); border-radius: 16px; padding: 18px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); margin-bottom: 15px; border: 1px solid #222; }
+        h2 { margin: 0 0 12px 0; color: var(--text-secondary); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; }
+        
+        .balance-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .stat { background: #1a1a1a; padding: 12px; border-radius: 12px; text-align: center; border: 1px solid #333; }
+        .stat span { display: block; font-size: 0.65rem; color: var(--text-secondary); font-weight: bold; margin-bottom: 4px; }
+        .stat b { font-size: 1.1rem; color: #ffffff; }
+        
+        input { 
+            width: 100%; 
+            padding: 14px; 
+            margin: 8px 0; 
+            border: 1px solid #333; 
+            border-radius: 10px; 
+            box-sizing: border-box; 
+            font-size: 16px; 
+            background: var(--input-bg); 
+            color: white;
+            outline: none; 
+        }
+        input:focus { border-color: var(--primary); }
+        
+        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        button { padding: 16px; border: none; border-radius: 10px; font-weight: bold; color: white; cursor: pointer; transition: 0.2s; font-size: 0.9rem; }
+        .btn-in { background: var(--income); }
+        .btn-out { background: var(--expense); }
+        button:active { transform: scale(0.96); opacity: 0.8; }
+        
+        .history-item { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #222; font-size: 0.9rem; align-items: center; }
+        .monto-in { color: #81c784; font-weight: bold; }
+        .monto-out { color: #e57373; font-weight: bold; }
+        .tasa-input { background: #1a1a1a; border: 1px solid #fbc02d; color: #fbc02d; font-weight: bold; text-align: center; }
+        
+        small { color: var(--text-secondary); font-size: 0.75rem; }
+    </style>
+</head>
+<body>
+
+    <header class="app-header">
+        <h1>Control Financiero</h1>
+    </header>
+
+    <div class="container">
+        <!-- Tasa BCV -->
+        <div class="card">
+            <label style="font-size: 0.65rem; font-weight: bold; color: var(--text-secondary);">TASA BCV (EDITABLE):</label>
+            <input type="number" id="tasa-bcv" class="tasa-input" value="510.7873" step="0.0001">
+        </div>
+
+        <!-- Balance -->
+        <div class="card">
+            <h2>Balance Actual</h2>
+            <div class="balance-grid">
+                <div class="stat"><span>DÓLARES</span><b id="saldo-usd">$0.00</b></div>
+                <div class="stat"><span>BOLÍVARES</span><b id="saldo-bs">Bs. 0,00</b></div>
+            </div>
+        </div>
+
+        <!-- Registro -->
+        <div class="card">
+            <h2>Nuevo Movimiento</h2>
+            <input type="text" id="concepto" placeholder="Descripción">
+            <input type="number" id="monto" placeholder="Monto en $">
+            <div class="btn-group">
+                <button class="btn-in" onclick="registrar(true)">+ INGRESO</button>
+                <button class="btn-out" onclick="registrar(false)">- GASTO</button>
+            </div>
+        </div>
+
+        <!-- Historial -->
+        <div class="card">
+            <h2>Historial</h2>
+            <div id="historial"></div>
+            <button onclick="borrarTodo()" style="background:none; color:#555; font-size:0.7rem; margin-top:20px; width:100%;">Resetear Aplicación</button>
+        </div>
+    </div>
+
+    <script>
+        let datosApp = JSON.parse(localStorage.getItem('finanzasData')) || { saldo: 0.0, historial: [] };
+        
+        function guardar() {
+            localStorage.setItem('finanzasData', JSON.stringify(datosApp));
+            actualizarInterfaz();
+        }
+
+        function actualizarInterfaz() {
+            const tasa = parseFloat(document.getElementById('tasa-bcv').value) || 0;
+            document.getElementById('saldo-usd').innerText = `$${datosApp.saldo.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+            document.getElementById('saldo-bs').innerText = `Bs. ${(datosApp.saldo * tasa).toLocaleString('de-DE', {minimumFractionDigits: 2})}`;
+            
+            const contenedor = document.getElementById('historial');
+            contenedor.innerHTML = '';
+            
+            datosApp.historial.forEach(mov => {
+                const item = document.createElement('div');
+                item.className = 'history-item';
+                const clase = mov.tipo === 'in' ? 'monto-in' : 'monto-out';
+                const signo = mov.tipo === 'in' ? '+' : '-';
+                
+                item.innerHTML = `
+                    <div><strong>${mov.concepto}</strong></div>
+                    <div class="${clase}">${signo}$${mov.monto.toFixed(2)}<br><small>Bs. ${(mov.monto * tasa).toLocaleString('de-DE', {maximumFractionDigits: 2})}</small></div>
+                `;
+                contenedor.appendChild(item);
+            });
+        }
+
+        function registrar(esIngreso) {
+            const concepto = document.getElementById('concepto').value;
+            const monto = parseFloat(document.getElementById('monto').value);
+
+            if (concepto && monto > 0) {
+                if (esIngreso) datosApp.saldo += monto;
+                else datosApp.saldo -= monto;
+                
+                datosApp.historial.unshift({
+                    concepto: concepto,
+                    monto: monto,
+                    tipo: esIngreso ? 'in' : 'out'
+                });
+
+                document.getElementById('concepto').value = '';
+                document.getElementById('monto').value = '';
+                guardar();
+            }
+        }
+
+        function borrarTodo() {
+            if(confirm("¿Seguro que quieres borrar todos los datos?")) {
+                datosApp = { saldo: 0.0, historial: [] };
+                guardar();
+            }
+        }
+
+        document.getElementById('tasa-bcv').addEventListener('input', actualizarInterfaz);
+        actualizarInterfaz();
+    </script>
+</body>
+</html>
